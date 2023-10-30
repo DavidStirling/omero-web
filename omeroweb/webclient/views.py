@@ -873,6 +873,64 @@ def api_plate_list(request, conn=None, **kwargs):
 
 
 @login_required()
+def api_well_list(request, conn=None, **kwargs):
+    # Get parameters
+    try:
+        page = get_long_or_default(request, "page", 1)
+        limit = get_long_or_default(request, "limit", settings.PAGE)
+        group_id = get_long_or_default(request, "group", -1)
+        plate_id = get_long_or_default(request, "id", None)
+    except ValueError:
+        return HttpResponseBadRequest("Invalid parameter value")
+
+    if not conn.isValidGroup(group_id):
+        return HttpResponseForbidden("Not a member of Group: %s" % group_id)
+
+    try:
+        # Get the plates
+        wells = tree.marshal_wells(
+            conn=conn, plate_id=plate_id, group_id=group_id, page=page, limit=limit
+        )
+    except ApiUsageException as e:
+        return HttpResponseBadRequest(e.serverStackTrace)
+    except ServerError as e:
+        return HttpResponseServerError(e.serverStackTrace)
+    except IceException as e:
+        return HttpResponseServerError(e.message)
+
+    return JsonResponse({"wells": wells})
+
+
+@login_required()
+def api_wellsample_list(request, conn=None, **kwargs):
+    # Get parameters
+    try:
+        page = get_long_or_default(request, "page", 1)
+        limit = get_long_or_default(request, "limit", settings.PAGE)
+        group_id = get_long_or_default(request, "group", -1)
+        well_id = get_long_or_default(request, "id", None)
+    except ValueError:
+        return HttpResponseBadRequest("Invalid parameter value")
+
+    if not conn.isValidGroup(group_id):
+        return HttpResponseForbidden("Not a member of Group: %s" % group_id)
+
+    try:
+        # Get the plates
+        wellsamples = tree.marshal_wellsamples(
+            conn=conn, well_id=well_id, group_id=group_id, page=page, limit=limit
+        )
+    except ApiUsageException as e:
+        return HttpResponseBadRequest(e.serverStackTrace)
+    except ServerError as e:
+        return HttpResponseServerError(e.serverStackTrace)
+    except IceException as e:
+        return HttpResponseServerError(e.message)
+
+    return JsonResponse({"wellsamples": wellsamples})
+
+
+@login_required()
 def api_plate_acquisition_list(request, conn=None, **kwargs):
     # Get parameters
     try:

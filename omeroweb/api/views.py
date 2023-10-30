@@ -85,6 +85,8 @@ def api_base(request, api_version=None, **kwargs):
         "url:images": build_url(request, "api_images", v),
         "url:screens": build_url(request, "api_screens", v),
         "url:plates": build_url(request, "api_plates", v),
+        "url:wells": build_url(request, "api_wells", v),
+        "url:wellsamples": build_url(request, "api_wellsamples", v),
         "url:rois": build_url(request, "api_rois", v),
         "url:token": build_url(request, "api_token", v),
         "url:servers": build_url(request, "api_servers", v),

@@ -1027,6 +1027,242 @@ def marshal_plates(
     return plates
 
 
+def _marshal_well_simple(conn, row):
+    """_marshal_well namespace already used by the tag search
+
+    Given a Well row (list) marshals it into a dictionary.  Order and
+    type of columns in row is:
+      * id (rlong)
+      * row (rlong)
+      * column (rlong)
+      * details.owner.id (rlong)
+      * details.permissions (dict)
+      * child_count (rlong)
+
+    @param conn OMERO gateway.
+    @type conn L{omero.gateway.BlitzGateway}
+    @param row The Well row to marshal
+    @type row L{list}
+    """
+
+    well_id, row, column, owner_id, permissions, child_count = row
+    well = dict()
+    well["id"] = unwrap(well_id)
+    well["row"] = unwrap(row)
+    well["column"] = unwrap(column)
+    well["ownerId"] = unwrap(owner_id)
+    well["childCount"] = unwrap(child_count)
+    well["permsCss"] = parse_permissions_css(permissions, unwrap(owner_id), conn)
+    return well
+
+
+def marshal_wells(
+    conn,
+    plate_id=None,
+    orphaned=False,
+    group_id=-1,
+    experimenter_id=-1,
+    page=1,
+    limit=settings.PAGE,
+):
+    """Marshals wells
+
+    @param conn OMERO gateway.
+    @type conn L{omero.gateway.BlitzGateway}
+    @param plate_id The Plate ID to filter by or `None` to
+    not filter by a specific plate.
+    defaults to `None`
+    @type plate_id L{long}
+    @param orphaned If this is to filter by orphaned data. Overridden
+    by plate_id.
+    defaults to False
+    @type orphaned Boolean
+    @param group_id The Group ID to filter by or -1 for all groups,
+    defaults to -1
+    @type group_id L{long}
+    @param experimenter_id The Experimenter (user) ID to filter by
+    or -1 for all experimenters
+    @type experimenter_id L{long}
+    @param page Page number of results to get. `None` or 0 for no paging
+    defaults to 1
+    @type page L{long}
+    @param limit The limit of results per page to get
+    defaults to the value set in settings.PAGE
+    @type page L{long}
+    """
+    wells = []
+    params = omero.sys.ParametersI()
+    service_opts = deepcopy(conn.SERVICE_OPTS)
+
+    # Set the desired group context
+    if group_id is None:
+        group_id = -1
+    service_opts.setOmeroGroup(group_id)
+
+    # Paging
+    if page is not None and page > 0:
+        params.page((page - 1) * limit, limit)
+
+    where_clause = []
+    if experimenter_id is not None and experimenter_id != -1:
+        params.addId(experimenter_id)
+        where_clause.append("well.details.owner.id = :id")
+
+    qs = conn.getQueryService()
+
+    q = """
+        select new map(well.id as id,
+               well.row as row,
+               well.column as column,
+               well.details.owner.id as ownerId,
+               well as well_details_permissions,
+               (select count(ws.id) from WellSample ws
+                where ws.well.id=well.id) as childCount)
+        from Well well
+        """
+
+    # If this is a query to get wells from a parent plate
+    if plate_id is not None:
+        params.add("pid", rlong(plate_id))
+        where_clause.append("well.plate.id = :pid")
+    elif orphaned:
+        raise NotImplementedError("Wells should not be able to be orphaned")
+    q += """
+        %s
+        order by well.plate.id, well.row, well.column, well.id
+        """ % build_clause(
+        where_clause, "where", "and"
+    )
+
+    for e in qs.projection(q, params, service_opts):
+        e = unwrap(e)
+        e = [
+            e[0]["id"],
+            e[0]["row"],
+            e[0]["column"],
+            e[0]["ownerId"],
+            e[0]["well_details_permissions"],
+            e[0]["childCount"],
+        ]
+        wells.append(_marshal_well_simple(conn, e[0:6]))
+
+    return wells
+
+
+def _marshal_wellsample(conn, row):
+    """Given a WellSample row (list) marshals it into a dictionary.  Order and
+    type of columns in row is:
+      * id (rlong)
+      * imageId (rlong)
+      * details.owner.id (rlong)
+      * details.permissions (dict)
+
+    @param conn OMERO gateway.
+    @type conn L{omero.gateway.BlitzGateway}
+    @param row The Well row to marshal
+    @type row L{list}
+    """
+
+    wellsample_id, image_id, owner_id, permissions = row
+    wellsample = dict()
+    wellsample["id"] = unwrap(wellsample_id)
+    wellsample["imageId"] = unwrap(image_id)
+    wellsample["ownerId"] = unwrap(owner_id)
+    wellsample["permsCss"] = parse_permissions_css(permissions,
+                                                   unwrap(owner_id), conn)
+    return wellsample
+
+
+def marshal_wellsamples(
+        conn,
+        well_id=None,
+        orphaned=False,
+        group_id=-1,
+        experimenter_id=-1,
+        page=1,
+        limit=settings.PAGE,
+):
+    """Marshals wellsamples
+
+    @param conn OMERO gateway.
+    @type conn L{omero.gateway.BlitzGateway}
+    @param well_id The Well ID to filter by or `None` to
+    not filter by a specific well.
+    defaults to `None`
+    @type well_id L{long}
+    @param orphaned If this is to filter by orphaned data. Overridden
+    by well_id.
+    defaults to False
+    @type orphaned Boolean
+    @param group_id The Group ID to filter by or -1 for all groups,
+    defaults to -1
+    @type group_id L{long}
+    @param experimenter_id The Experimenter (user) ID to filter by
+    or -1 for all experimenters
+    @type experimenter_id L{long}
+    @param page Page number of results to get. `None` or 0 for no paging
+    defaults to 1
+    @type page L{long}
+    @param limit The limit of results per page to get
+    defaults to the value set in settings.PAGE
+    @type page L{long}
+    """
+    wellsamples = []
+    params = omero.sys.ParametersI()
+    service_opts = deepcopy(conn.SERVICE_OPTS)
+
+    # Set the desired group context
+    if group_id is None:
+        group_id = -1
+    service_opts.setOmeroGroup(group_id)
+
+    # Paging
+    if page is not None and page > 0:
+        params.page((page - 1) * limit, limit)
+
+    where_clause = []
+    if experimenter_id is not None and experimenter_id != -1:
+        params.addId(experimenter_id)
+        where_clause.append("wellsample.details.owner.id = :id")
+
+    qs = conn.getQueryService()
+
+    q = """
+        select new map(wellsample.id as id,
+               wellsample.image.id as imageId,
+               wellsample.details.owner.id as ownerId,
+               wellsample as wellsample_details_permissions)
+        from WellSample wellsample
+        """
+
+    # If this is a query to get wellsamples from a parent well
+    if well_id is not None:
+        params.add("wid", rlong(well_id))
+        where_clause.append("wellsample.well.id = :wid")
+    elif orphaned:
+        raise NotImplementedError(
+            "Wellsamples should not be able to be orphaned")
+
+    q += """
+        %s
+        order by wellsample.well.id, wellsample.id
+        """ % build_clause(
+        where_clause, "where", "and"
+    )
+
+    for e in qs.projection(q, params, service_opts):
+        e = unwrap(e)
+        e = [
+            e[0]["id"],
+            e[0]["imageId"],
+            e[0]["ownerId"],
+            e[0]["wellsample_details_permissions"],
+        ]
+        wellsamples.append(_marshal_wellsample(conn, e[0:4]))
+
+    return wellsamples
+
+
 def _marshal_plate_acquisition(conn, row):
     """Given a PlateAcquisition row (list) marshals it into a dictionary.
     Order and type of columns in row is:

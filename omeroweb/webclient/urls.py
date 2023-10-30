@@ -366,6 +366,9 @@ urlpatterns = [
         name="api_share_images",
     ),
     re_path(r"^api/plates/$", views.api_plate_list, name="api_plates"),
+    re_path(r"^api/wells/$", views.api_well_list, name="api_wells"),
+    re_path(r"^api/wellsamples/$", views.api_wellsample_list,
+            name="api_wellsamples"),
     # re_path(r'^api/plates/(?P<pk>[0-9]+)/$', views.api_plate_detail),
     re_path(
         r"^api/plate_acquisitions/$",
